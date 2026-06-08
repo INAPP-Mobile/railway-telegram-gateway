@@ -1,4 +1,4 @@
 {
-  "goal": "Build railway-telegram-gateway: receives Telegram webhooks, routes to connected clients via WebSocket. Core components: webhook receiver, WS gateway, client protocol, Railway deploy config.",
+  "goal": "Draft railway-template design docs (railway.toml, service names, build/run commands), prepare test plan for production e2e validation, and get deploy-ready checklist created so the team can trigger Railway build once Michael confirms git push.",
   "status": "active"
 }

@@ -6,3 +6,4 @@
 [2026-06-08T06:49:22.800Z] [cowork] Skipping 1 file(s) not writable by coder: e2e/
 [2026-06-08T06:49:51.771Z] [cowork] Skipping 5 file(s) not writable by coder: e2e/webhook-gateway.test.d.ts, e2e/webhook-gateway.test.d.ts.map, e2e/webhook-gateway.test.js, e2e/webhook-gateway.test.js.map, e2e/webhook-gateway.test.ts
 [2026-06-08T06:50:10.413Z] [cowork] Skipping 5 file(s) not writable by coder: e2e/webhook-gateway.test.d.ts, e2e/webhook-gateway.test.d.ts.map, e2e/webhook-gateway.test.js, e2e/webhook-gateway.test.js.map, e2e/webhook-gateway.test.ts
+[2026-06-08T07:07:27.446Z] [cowork] Skipping 9 file(s) not writable by pm: .cowork/cowork-role.jsonl, .cowork/goal-pm.json, .cowork/peer-seen-coder.json, .cowork/peer-seen-pm.json, .cowork/inbox/coder/pm-ack-1780901431796.json, .cowork/inbox/coder/pm-ack-1780901436798.json, .cowork/inbox/coder/pm-ack-1780901441798.json, .cowork/inbox/coder/pm-ack-1780901446800.json, .cowork/inbox/pm/coder-msg-1780901431081-dwvvuv.json
