@@ -60,14 +60,13 @@ export class AdminAPI {
       };
       this.bots.set(botId, botConfig);
 
-      // 3. Register webhook with Telegram
+      // 3. Register webhook with Telegram — omitting allowed_updates means all event types are delivered
       const setWebhookRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url: `${this.baseUrl}/webhook/bot/${botId}`,
           drop_pending_updates: true,
-          allowed_updates: ['message', 'channel_post', 'my_chat_member'],
         }),
       });
       const setWebhookData = await setWebhookRes.json() as TelegramApiResponse<boolean>;
