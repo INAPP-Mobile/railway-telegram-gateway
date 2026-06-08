@@ -1,4 +1,0 @@
-{
-  "goal": "Draft railway-template design docs (railway.toml, service names, build/run commands), prepare test plan for production e2e validation, and get deploy-ready checklist created so the team can trigger Railway build once Michael confirms git push.",
-  "status": "active"
-}
