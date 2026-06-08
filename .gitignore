@@ -13,3 +13,5 @@ test-results/
 
 # Node
 node_modules/
+
+.railway/
