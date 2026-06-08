@@ -1,0 +1,4 @@
+{
+  "telegramWebhookUrl": "https://railway-telegram-gateway.up.railway.app",
+  "telegramWebhookPort": 4096
+}

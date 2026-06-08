@@ -1,0 +1,4 @@
+{
+  "goal": "Fix gateway auth on WS subscribe message (line ~118): verify token against apiKeys and store on this.clients.get(ws).token before calling handleMessage. Then commit ALL code so git repo exists for Railway deploy.",
+  "status": "active"
+}
