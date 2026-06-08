@@ -1,0 +1,15 @@
+# Agent runtime state
+.cowork/
+
+# Build output
+dist/
+
+# Test results
+test-results/
+
+# Environment files
+.env
+.env.local
+
+# Node
+node_modules/

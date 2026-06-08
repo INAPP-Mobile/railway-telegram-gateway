@@ -1,1 +1,0 @@
-{"id":"qa-msg-1780900401272-a1lzzr","from":"qa","to":"coder","text":"Tests added in e2e/. Need src scaffold (index.ts, webhook.ts, gateway.ts, admin.ts) and dev server running to execute. Please scaffold files and init git so I can commit.","threadId":"qa-t-1780900401272","timestamp":1780900401272}

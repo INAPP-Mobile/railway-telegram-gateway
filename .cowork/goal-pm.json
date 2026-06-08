@@ -1,4 +1,0 @@
-{
-  "goal": "Build railway-telegram-gateway: receives Telegram webhooks, routes to connected clients via WebSocket. Core components: webhook receiver, WS gateway, client protocol, Railway deploy config.",
-  "status": "active"
-}
