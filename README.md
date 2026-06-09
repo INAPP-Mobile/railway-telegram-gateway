@@ -9,15 +9,15 @@ No polling, no public bot IPs needed, no infrastructure wrangling. Just bots →
 ## How It Works
 
 ```
-                     ┌─────────────────────────────────┐
-                     │    Railway Telegram Gateway      │
-                     │                                  │
+                     ┌───────────────────────────────────┐
+                     │     Railway Telegram Gateway       │
+                     │                                   │
   Telegram Bot A ───▶│  /webhook/bot/:id  ──▶  Gateway  │──▶ WebSocket Client A
   Telegram Bot B ───▶│                        Dispatch │──▶ WebSocket Client B
-                     │                                  │
-                     │  /admin/bots  (REST API)         │
-                     │  /ws?token=   (WebSocket)        │
-                     └─────────────────────────────────┘
+                     │                                   │◀── sendMessage ◀──┐
+                     │  /admin/bots  (REST API)          │                   │
+                     │  /ws?token=   (WebSocket)         │───────────────────┘
+                     └───────────────────────────────────┘
 ```
 
 1. **Register** a bot via the Admin API with its Telegram bot token
@@ -103,6 +103,9 @@ Connect at `wss://your-domain.com/?token=<GATEWAY_API_KEY>`.
 | Send | `{ "type": "ping" }` | Heartbeat |
 | Receive | `{ "type": "pong" }` | Heartbeat response |
 | Receive | `{ "type": "update", "botId": "...", "payload": {...} }` | Telegram update event |
+| Send | `{ "type": "sendMessage", "botId": "...", "chatId": 123, "text": "Hello" }` | Send a Telegram message from a registered bot |
+| Receive | `{ "type": "sent", "botId": "...", "ok": true }` | Confirmation of sent message |
+| Send | `{ "type": "sendMessage", "botId": "...", "chatId": 123, "text": "Hi", "parse_mode": "HTML" }` | Send with formatting options |
 
 ### Update Payload
 
@@ -141,6 +144,7 @@ A TypeScript/React client SDK is available in [`client-sdk/`](client-sdk/). It h
 - Automatic heartbeat
 - Typed subscription management
 - React hooks for consuming updates
+- `sendMessage()` for sending Telegram messages over the WebSocket
 
 ## Deploy and Host railway-telegram-gateway
 
@@ -148,7 +152,7 @@ Source: [https://github.com/INAPP-Mobile/railway-telegram-gateway](https://githu
 
 ### About Hosting
 
-Multi-bot Telegram webhook gateway with real-time WebSocket event streaming. Register Telegram bots via Admin API and stream their updates to WebSocket clients — all in one Railway deployment.
+Multi-bot Telegram webhook gateway with real-time WebSocket event streaming and bidirectional messaging. Register Telegram bots via Admin API, stream their updates to WebSocket clients, and send messages back through the same connection — all in one Railway deployment.
 
 ### Why Deploy
 
