@@ -1,13 +1,10 @@
-import { config } from 'dotenv';
+import 'dotenv/config';
 import { serve } from '@hono/node-server';
 import type { Server as HttpServer } from 'http';
 import { WebSocketGateway } from './gateway';
 import { WebhookHandler } from './webhook';
 import { AdminAPI } from './admin';
 import { createApp } from './app';
-
-// Load environment variables
-config();
 
 // Validate required environment variables
 const REQUIRED_VARS = ['GATEWAY_API_KEY'] as const;
