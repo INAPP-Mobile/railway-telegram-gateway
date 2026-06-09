@@ -1,6 +1,6 @@
 {
   "name": "telegram-gateway-client",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "TypeScript WebSocket client for Railway Telegram Gateway — subscribe to bot updates with auto-reconnect and exponential backoff.",
   "main": "index.js",
   "types": "index.d.ts",

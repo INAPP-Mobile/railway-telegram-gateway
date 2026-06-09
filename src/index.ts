@@ -42,6 +42,11 @@ const server = serve(
 // Attach WebSocket server to the underlying Node HTTP server
 gateway.createWSServer(server);
 
+// Wire up sendMessage handler so WebSocket clients can send Telegram messages
+gateway.setSendMessageHandler((botId, chatId, text, options) =>
+  webhookHandler.sendMessage(botId, chatId, text, options)
+);
+
 // Start heartbeat for WebSocket connections
 gateway.startHeartbeat(HEARTBEAT_INTERVAL);
 
