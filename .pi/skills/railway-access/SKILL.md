@@ -16,6 +16,8 @@ A general-purpose skill for managing Railway templates via the Railway CLI. Use 
 - [Health Checks](#health-checks)
 - [Deploy Configuration Files](#deploy-configuration-files)
 - [Custom Template Image (Marketplace Card)](#custom-template-image-marketplace-card)
+- [Creating a Template from a Project](#creating-a-template-from-a-project)
+- [Recreating a Template to Refresh Variable Defaults](#recreating-a-template-to-refresh-variable-defaults)
 - [GitHub ↔ Railway Sync](#github--railway-sync)
 - [Agent Limitations](#agent-limitations)
 - [Reference Cheatsheet](#reference-cheatsheet)
@@ -183,13 +185,84 @@ railway templates delete <id>          # Delete permanently
 
 ### Creating a Template from a Project
 
-If you have an existing Railway project you want to template:
-
 ```bash
+# Interactive
 railway templates create
+
+# Non-interactive (from an existing project)
+railway templates create --project <project-name> --environment production --json
 ```
 
-This is interactive. The CLI will prompt for project selection, name, description, category.
+The CLI returns the new (UNPUBLISHED) template JSON with id, code/slug, and editorUrl.
+
+#### Requirements
+
+- The project must have a **running service linked to a GitHub repo** as its source.
+- Services deployed via `railway up` (direct upload) **cannot** be used to create templates. The CLI will error: `Service does not have a source that can be used to generate a template`.
+
+#### Fix: Connect a Service to GitHub Source
+
+If the service was deployed via `railway up` instead of from a GitHub repo:
+
+```bash
+railway service source connect \
+  --repo owner/repo \
+  --branch main \
+  --service service-name
+```
+
+Then retry `railway templates create`.
+
+#### Full Workflow: Deploy + Create Template
+
+```bash
+# 1. Push code to GitHub
+# 2. Deploy to Railway from CLI (creates initial service)
+railway up --service my-service
+
+# 3. Connect service to GitHub repo source
+railway service source connect --repo owner/repo --branch main --service my-service
+
+# 4. Create template from the project
+railway templates create --project my-project --environment production --json
+```
+
+### Recreating a Template to Refresh Variable Defaults
+
+This is the **only** reliable way to update env var defaults on an existing template. Template variable defaults are cached at creation time and subsequent `.env.example` edits are ignored.
+
+```bash
+# 1. Update .env.example with new defaults, push to GitHub
+git add .env.example
+git commit -m "Update env var defaults"
+git push origin <template-branch>
+
+# 2. Delete the existing template
+railway templates delete <template-id> --yes
+
+# 3. Ensure a service is running from the repo (deploy if needed)
+railway up --service my-service
+railway service source connect --repo owner/repo --branch <template-branch> --service my-service
+
+# 4. Create a fresh template (this re-reads .env.example)
+railway templates create --project my-project --environment production --json
+
+# 5. Publish with all metadata
+railway templates publish <new-template-id> \
+  --category <Category> \
+  --description "75-char description" \
+  --readme-file README.md \
+  --image <image-url> \
+  --json
+
+# 6. Update any README deploy buttons to point to the new URL
+```
+
+**Downsides of recreating:**
+- The deploy URL changes (new auto-generated slug)
+- The old URL stops working (404)
+- Must update README and any references to the old deploy URL
+- Template UUID changes
 
 ## Required README Sections
 
@@ -248,65 +321,77 @@ Railway auto-detects template variables from the repo. The sources in priority o
 ### Best Practices
 
 - Keep `.env.example` in the repo root with all documented variables
-- Use comments above each variable in `.env.example` as descriptions (Railway shows these in the deploy form)
-- **Required variables with no good default** — set value to empty (`KEY=`). This forces the user to type something in the deploy form. The app must also check for this and fail fast.
+- Use plain comments above each variable (`# Description`) as descriptions (Railway shows these in the deploy form). **Avoid decorative section headers** like `# ─── Required ─────` — they may confuse Railway's parser.
+- **Required variables with no good default** — set value to empty (`KEY=`). This forces the user to type something in the deploy form.
 - **Optional variables** — provide sensible production defaults (`MAX_CLIENTS=10`)
 - **Placeholder values** are dangerous — never use `KEY=changeme-please`. Users may deploy without changing it.
 - Include `PORT` with a default of `3000` (Railway overrides this at runtime)
-- Organize `.env.example` with section headers and clear descriptions per variable
 
-#### Example `.env.example` Structure
+#### ⚠️ Critical: App Must Handle Missing Required Vars Gracefully
 
-```env
-# ─── Required ────────────────────────────────────────────
-# What this key does. Keep it empty so users must fill it in.
-GATEWAY_API_KEY=
+Empty defaults (`KEY=`) mean the app starts with no value during first deploy. If the app calls `process.exit(1)` on a missing env var, the Railway health check will fail and the deploy will roll back.
 
-# ─── Optional — Feature ──────────────────────────────────
-# Description of the variable and when to set it.
-SOME_OPTION=
+**Solution:** Generate a random fallback key and log a warning, instead of crashing:
 
-# Description with a sensible default.
-MAX_ITEMS=10
+```typescript
+import crypto from 'crypto';
 
-# ─── Server ──────────────────────────────────────────────
-PORT=3000
+const USER_KEY = process.env.MY_API_KEY?.trim() || '';
+const MY_API_KEY = USER_KEY || `gw-${crypto.randomBytes(16).toString('hex')}`;
+
+if (!USER_KEY) {
+  console.warn('⚠️  MY_API_KEY not set. A random key was generated for this session.');
+  console.warn(`   Generated key: ${MY_API_KEY}`);
+  console.warn(`   Set MY_API_KEY in your Railway dashboard to use a persistent key.`);
+}
 ```
+
+This lets the first deploy pass health check. Users see the generated key in logs and can set their own later.
 
 #### After Updating `.env.example`
 
-Push to the synced branch. Railway auto-detects variables from `.env.example` during sync. If the deploy form doesn't update, republish the template:
+Railway **caches** env var defaults at **template creation time** only. Editing `.env.example` on an existing template has no effect on the deploy form defaults. To update defaults, you must **delete and recreate** the template (see [Recreating a Template to Refresh Variable Defaults](#recreating-a-template-to-refresh-variable-defaults)).
 
 ```bash
+# ❌ This does NOT update variable defaults:
 railway templates publish <template-id> --json
+
+# ✅ Correct: delete, push, deploy, recreate:
+railway templates delete <template-id> --yes
+# ... push updated .env.example ...
+# ... deploy a service from repo ...
+railway templates create --project <project> --environment production --json
+railway templates publish <new-template-id> --category ... --description ... --readme-file README.md --image <url> --json
 ```
 
-### Example `.env.example` (Production-Ready)
+#### Example `.env.example` (Production-Ready)
 
 ```env
-# ─── Required ────────────────────────────────────────────
-# Auth token for WebSocket + Admin API. Comma-separate for multiple keys.
-# Empty = user MUST fill this in on the deploy form.
+# Required: Auth key for WebSocket & Admin API. Set a strong unique value.
+# Accepts comma-separated keys.
 GATEWAY_API_KEY=
 
-# ─── Optional — Webhook ──────────────────────────────────
-# Public URL for bot webhook registration.
-# Empty = Railway auto-sets the service URL at runtime.
+# Public URL for bot webhook registration. Railway auto-sets this at runtime.
+# Only set if using a custom domain.
 BASE_URL=
 
-# Optional webhook secret.
+# Telegram webhook secret for update verification.
 WEBHOOK_SECRET=
 
-# ─── Optional — Limits ──────────────────────────────────
-# Max subscriptions per WebSocket client.
+# Max bot subscriptions per WebSocket client.
 SUBSCRIPTION_MAX_PER_CLIENT=10
 
-# ─── Optional — WebSocket ───────────────────────────────
+# WebSocket ping interval in milliseconds.
 WEBSOCKET_HEARTBEAT_INTERVAL=30000
 
-# ─── Server ──────────────────────────────────────────────
+# Skip Telegram getMe validation (set to "true" for local dev).
+SKIP_BOT_VALIDATION=false
+
+# Server port (Railway sets this automatically).
 PORT=3000
 ```
+
+
 
 ## Health Checks
 
@@ -400,7 +485,10 @@ When managing Railway templates from this agent environment:
 | Template description 75-char cap | Keep descriptions tight. Test with `--json` flag first. |
 | README must have specific Railway sections | Always append the 6 required sections at the end of the README before running `publish --readme-file` |
 | `--image` only sets marketplace card, not deploy page OG tags | These are two separate surfaces — card is CLI-automated, OG tags need GitHub repo description |
-| Template env var defaults cached at creation, not updated by pushes | Delete + recreate template after updating `.env.example`. Push `.env.example` first, deploy a service from the repo, then run `railway templates create` to generate a fresh template with new defaults. |
+| Template env var defaults cached at creation, not updated by pushes | Must delete + recreate template. See [Recreating a Template to Refresh Variable Defaults](#recreating-a-template-to-refresh-variable-defaults) for the full workflow. |
+| App crashes on deploy if required env var is empty (`process.exit(1)`) | Generate a random fallback key and log a warning instead of crashing. See the Critical section in [Environment Variable Conventions](#environment-variable-conventions). |
+| `railway up` deployed services can't be used for template creation | Connect the service to GitHub source via `railway service source connect --repo ... --branch ... --service ...` before running `railway templates create`. |
+| Decorative section headers in `.env.example` may confuse Railway's parser | Use simple `# Comment` above each variable. Avoid `# ─── Required ─────` style headers. |
 
 ## Reference Cheatsheet
 
