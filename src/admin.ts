@@ -38,16 +38,32 @@ export class AdminAPI {
     }
 
     try {
-      // 1. Validate bot via getMe
-      const getMeRes = await fetch(`https://api.telegram.org/bot${token}/getMe`);
-      if (!getMeRes.ok) {
-        throw new Error('Invalid bot token');
+      // 1. Validate bot via getMe (skip for local testing with SKIP_BOT_VALIDATION=true)
+      const skipValidation = process.env.SKIP_BOT_VALIDATION === 'true';
+      let botId: string;
+      let userId: number;
+
+      if (!skipValidation) {
+        const getMeRes = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+        if (!getMeRes.ok) {
+          throw new Error('Invalid bot token');
+        }
+        const getMeData = await getMeRes.json() as TelegramApiResponse<BotInfo>;
+        if (!getMeData.ok) {
+          throw new Error(getMeData.description || 'Failed to get bot info');
+        }
+        botId = String(getMeData.result.id);
+        userId = getMeData.result.id;
+      } else {
+        // For local testing: derive bot ID from token format <id>:<secret>
+        const parts = token.split(':');
+        const idStr = (parts.length >= 1) ? String(parts[0]) : '';
+        if (!idStr) {
+          throw new Error('Could not extract bot ID from token');
+        }
+        botId = idStr;
+        userId = parseInt(idStr, 10);
       }
-      const getMeData = await getMeRes.json() as TelegramApiResponse<BotInfo>;
-      if (!getMeData.ok) {
-        throw new Error(getMeData.description || 'Failed to get bot info');
-      }
-      const botId = String(getMeData.result.id);
 
       // 2. Register in memory
       const botConfig: BotConfig = {
@@ -55,7 +71,7 @@ export class AdminAPI {
         token,
         name: name || `bot-${botId}`,
         status: 'active',
-        userId: getMeData.result.id,
+        userId,
         registeredAt: new Date(),
       };
       this.bots.set(botId, botConfig);
@@ -101,22 +117,17 @@ export class AdminAPI {
     }
 
     try {
-      // 1. Delete webhook from Telegram
       await fetch(`https://api.telegram.org/bot${bot.token}/deleteWebhook`, {
         method: 'POST',
       });
-
-      // 2. Unregister from handler
       this.webhookHandler.unregisterBot(botId);
-
-      // 3. Remove from memory
       this.bots.delete(botId);
-
-      return c.json({ status: 'unregistered' } as BotDeregistrationResponse);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Failed to unregister bot';
       return c.json({ error: message }, 500);
     }
+
+    return c.json({ status: 'unregistered' } as BotDeregistrationResponse);
   }
 
   async listBots(c: Context): Promise<Response> {
