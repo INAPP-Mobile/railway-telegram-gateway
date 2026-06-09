@@ -6,19 +6,21 @@ import { WebhookHandler } from './webhook';
 import { AdminAPI } from './admin';
 import { createApp } from './app';
 
-// Validate required environment variables
-const REQUIRED_VARS = ['GATEWAY_API_KEY'] as const;
-for (const name of REQUIRED_VARS) {
-  const value = process.env[name]?.trim();
-  if (!value) {
-    console.error(`FATAL: ${name} environment variable is required. Set it in Railway dashboard.`);
-    process.exit(1);
-  }
+import crypto from 'crypto';
+
+// Generate a random API key if none is provided
+// Users should set their own GATEWAY_API_KEY in Railway dashboard
+const RAW_API_KEY = process.env.GATEWAY_API_KEY?.trim() || '';
+const GATEWAY_API_KEY = RAW_API_KEY || `gw-${crypto.randomBytes(16).toString('hex')}`;
+
+if (!RAW_API_KEY) {
+  console.warn('⚠️  GATEWAY_API_KEY not set. A random key was generated for this session.');
+  console.warn(`   Generated key: ${GATEWAY_API_KEY}`);
+  console.warn(`   Set GATEWAY_API_KEY in your Railway dashboard to use a persistent key.`);
 }
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
-const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY || '';
 const HEARTBEAT_INTERVAL = parseInt(process.env.WEBSOCKET_HEARTBEAT_INTERVAL || '30000', 10);
 
 // Instantiate core components
