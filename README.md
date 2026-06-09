@@ -1,6 +1,6 @@
 # Railway Telegram Gateway
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/railway-telegram-g-3)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/railway-telegram-gateway)
 
 A real-time Telegram bot update gateway. Register multiple Telegram bots via REST API, receive their webhook updates, and stream them to WebSocket clients — all in one Railway deployment.
 
@@ -141,6 +141,31 @@ A TypeScript/React client SDK is available in [`client-sdk/`](client-sdk/). It h
 - Automatic heartbeat
 - Typed subscription management
 - React hooks for consuming updates
+
+## Deploy and Host railway-telegram-gateway
+
+Source: [https://github.com/INAPP-Mobile/railway-telegram-gateway](https://github.com/INAPP-Mobile/railway-telegram-gateway)
+
+### About Hosting
+
+Multi-bot Telegram webhook gateway with real-time WebSocket event streaming. Register Telegram bots via Admin API and stream their updates to WebSocket clients — all in one Railway deployment.
+
+### Why Deploy
+
+Deploy railway-telegram-gateway on Railway with one click. Get instant HTTPS, automatic scaling, and zero-config infrastructure — no Docker or Kubernetes knowledge required.
+
+### Common Use Cases
+
+- Quick deployment for development and staging environments
+- Production-ready hosting with automatic HTTPS and scaling
+- One-click shareable demo environments
+- Bots application hosting with minimal configuration
+
+### Dependencies for
+
+#### Deployment Dependencies
+
+Railway automatically detects your project's runtime and provisions the necessary infrastructure. No additional dependencies required.
 
 ## License
 
