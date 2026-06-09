@@ -139,12 +139,22 @@ npm run dev
 
 ## Client SDK
 
-A TypeScript/React client SDK is available in [`client-sdk/`](client-sdk/). It handles:
+## Client SDK
+
+A TypeScript/React client SDK is published on npm as [`telegram-gateway-client`](https://www.npmjs.com/package/telegram-gateway-client).
+
+```bash
+npm install telegram-gateway-client
+```
+
+It handles:
 - WebSocket reconnection with exponential backoff
 - Automatic heartbeat
 - Typed subscription management
 - React hooks for consuming updates
 - `sendMessage()` for sending Telegram messages over the WebSocket
+
+Source code is in [`client-sdk/`](client-sdk/).
 
 ## Deploy and Host railway-telegram-gateway
 
