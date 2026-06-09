@@ -1,0 +1,42 @@
+{
+  "name": "telegram-gateway-client",
+  "version": "1.1.0",
+  "description": "TypeScript WebSocket client for Railway Telegram Gateway — subscribe to bot updates with auto-reconnect and exponential backoff.",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "index.d.ts.map",
+    "index.js.map",
+    "index.ts"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [
+    "telegram",
+    "websocket",
+    "gateway",
+    "railway",
+    "bot",
+    "client",
+    "realtime"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/INAPP-Mobile/railway-telegram-gateway.git",
+    "directory": "client-sdk/telegram-gateway-client"
+  },
+  "homepage": "https://github.com/INAPP-Mobile/railway-telegram-gateway/tree/main/client-sdk/telegram-gateway-client",
+  "bugs": {
+    "url": "https://github.com/INAPP-Mobile/railway-telegram-gateway/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

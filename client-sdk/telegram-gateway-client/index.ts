@@ -4,13 +4,21 @@ export interface TGUpdate {
   payload: Record<string, unknown>;
 }
 
-export type TGMessageType = 'subscribe' | 'unsubscribe' | 'ping' | 'subscribed' | 'unsubscribed' | 'pong' | 'update';
+export type TGMessageType = 'subscribe' | 'unsubscribe' | 'ping' | 'subscribed' | 'unsubscribed' | 'pong' | 'update' | 'sendMessage' | 'sent';
 
 export interface TGMessage {
   type: TGMessageType;
   botId?: string;
   token?: string;
   payload?: Record<string, unknown>;
+  chatId?: number | string;
+  text?: string;
+  parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
+  disable_web_page_preview?: boolean;
+  disable_notification?: boolean;
+  reply_to_message_id?: number;
+  ok?: boolean;
+  error?: string;
 }
 
 export type UpdateCallback = (botId: string, update: Record<string, unknown>) => void;
@@ -35,6 +43,21 @@ export class TelegramGatewayClient {
   subscribe(botId: string): void {
     this.subscriptions.add(botId);
     this.send({ type: 'subscribe', botId });
+  }
+
+  sendMessage(botId: string, chatId: number | string, text: string, options?: {
+    parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
+    disable_web_page_preview?: boolean;
+    disable_notification?: boolean;
+    reply_to_message_id?: number;
+  }): void {
+    this.send({
+      type: 'sendMessage',
+      botId,
+      chatId,
+      text,
+      ...(options || {}),
+    });
   }
 
   unsubscribe(botId: string): void {

@@ -40,6 +40,30 @@ export class WebhookHandler {
     });
   }
 
+  async sendMessage(
+    botId: string,
+    chatId: number | string,
+    text: string,
+    options?: {
+      parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
+      disable_web_page_preview?: boolean;
+      disable_notification?: boolean;
+      reply_to_message_id?: number;
+    }
+  ): Promise<{ ok: boolean; error?: string }> {
+    const bot = this.bots.get(botId);
+    if (!bot) {
+      return { ok: false, error: 'Bot not registered' };
+    }
+    try {
+      await bot.telegram.sendMessage(chatId, text, options || {});
+      return { ok: true };
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to send message';
+      return { ok: false, error: message };
+    }
+  }
+
   unregisterBot(botId: string): void {
     const bot = this.bots.get(botId);
     if (bot) {

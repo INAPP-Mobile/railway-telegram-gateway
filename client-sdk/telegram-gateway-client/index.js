@@ -19,6 +19,15 @@ class TelegramGatewayClient {
         this.subscriptions.add(botId);
         this.send({ type: 'subscribe', botId });
     }
+    sendMessage(botId, chatId, text, options) {
+        this.send({
+            type: 'sendMessage',
+            botId,
+            chatId,
+            text,
+            ...(options || {}),
+        });
+    }
     unsubscribe(botId) {
         this.subscriptions.delete(botId);
         this.send({ type: 'unsubscribe', botId });
@@ -32,6 +41,7 @@ class TelegramGatewayClient {
         this.ws = new WebSocket(wsUrl);
         this.ws.onopen = () => {
             this.reconnectAttempt = 0;
+            // Re-subscribe to all active subscriptions
             for (const botId of this.subscriptions) {
                 this.send({ type: 'subscribe', botId });
             }
@@ -44,6 +54,7 @@ class TelegramGatewayClient {
                 }
             }
             catch {
+                // ignore malformed messages
             }
         };
         this.ws.onclose = () => {

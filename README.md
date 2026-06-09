@@ -1,185 +1,186 @@
----
-description: Railway Telegram Gateway - multi-bot webhook to WebSocket gateway for Railway
-created: 2026-06-08
----# Railway Telegram Gateway
+# Railway Telegram Gateway
 
-<p align="center">
-  <a href="https://railway.com/deploy">
-    <img src="https://railway.com/button.svg" width="174" />
-  </a>
-</p>
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/railway-telegram-gateway)
 
-## Overview
+A real-time Telegram bot update gateway. Register multiple Telegram bots via REST API, receive their webhook updates, and stream them to WebSocket clients — all in one Railway deployment.
 
-A WebSocket gateway that receives **Telegram bot webhooks** and streams updates to connected clients over WebSocket. Designed for deployment on [Railway](https://railway.app) as a multi-bot architecture — register bots via Admin API, subscribe clients in real-time.
+No polling, no public bot IPs needed, no infrastructure wrangling. Just bots → webhook → WebSocket.
 
----
-
-## Architecture
+## How It Works
 
 ```
-Telegram → [Webhook Endpoint] → Telegraf Bot → Gateway (update dispatch)
-                              ↓
-WebSocket Clients (subscribe per botId)
-              │
-     ┌───────┴────────┐
-     ▼                ▼
-  Client A         Client B
-(subscribed to    (subscribed to
-bot X updates)    bot Y updates)
+                     ┌───────────────────────────────────┐
+                     │     Railway Telegram Gateway       │
+                     │                                   │
+  Telegram Bot A ───▶│  /webhook/bot/:id  ──▶  Gateway  │──▶ WebSocket Client A
+  Telegram Bot B ───▶│                        Dispatch │──▶ WebSocket Client B
+                     │                                   │◀── sendMessage ◀──┐
+                     │  /admin/bots  (REST API)          │                   │
+                     │  /ws?token=   (WebSocket)         │───────────────────┘
+                     └───────────────────────────────────┘
 ```
 
----
+1. **Register** a bot via the Admin API with its Telegram bot token
+2. Gateway auto-configures the Telegram webhook URL for that bot
+3. Telegram sends updates (messages, callbacks, channel posts) to the gateway
+4. Gateway dispatches updates over WebSocket to subscribed clients
 
 ## Quick Deploy
 
-1. Click the **Deploy on Railway** button above
-2. Set `GATEWAY_API_KEY` in your Railway app settings (**required**)
-3. Optionally set `WEBHOOK_SECRET`, `BASE_URL`, and `SUBSCRIPTION_MAX_PER_CLIENT`
-4. Redeploy to apply env var changes
-5. Use the Admin API to register bots
-
----
+| Step | Action |
+|------|--------|
+| 1 | Click **Deploy on Railway** above |
+| 2 | Set `GATEWAY_API_KEY` in Railway dashboard (**required**) |
+| 3 | Deploy — the app fails fast if required vars are missing |
+| 4 | Use the Admin API to register your Telegram bots |
 
 ## Environment Variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `GATEWAY_API_KEY` | ✅ Yes | — | Primary auth key for WebSocket client connections. Accepts comma-separated values (e.g., `"key1,key2"`). |
-| `WEBHOOK_SECRET` | ❌ No | — | Verify webhook integrity from Telegram via `X-Telegram-Bot-Secret` header |
-| `BASE_URL` | ❌ No | `http://localhost:${PORT}` | Base URL for admin webhook config (sets bot webhook URLs via Telegram API) |
-| `SUBSCRIPTION_MAX_PER_CLIENT` | ❌ No | `10` | Max concurrent bot subscriptions per WebSocket client |
-| `WEBSOCKET_HEARTBEAT_INTERVAL` | ❌ No | `30000` (30s) | Interval for WebSocket heartbeat pings |
-| `PORT` | ✅ Auto | Railway sets → 8080 | Web server port. Set `3000` for local dev. Defaults to the `PORT` env variable set by Railway at runtime |
-
----
+| `GATEWAY_API_KEY` | ✅ Yes | — | Auth key for WebSocket clients & Admin API. Accepts comma-separated keys. |
+| `BASE_URL` | ❌ No | `http://localhost:${PORT}` | Public URL used when setting bot webhooks via the Telegram API (auto-configured on Railway) |
+| `WEBHOOK_SECRET` | ❌ No | — | Optional secret for Telegram webhook verification |
+| `SUBSCRIPTION_MAX_PER_CLIENT` | ❌ No | `10` | Max bot subscriptions per WebSocket client |
+| `WEBSOCKET_HEARTBEAT_INTERVAL` | ❌ No | `30000` | WebSocket ping interval (ms) |
+| `SKIP_BOT_VALIDATION` | ❌ No | `false` | Skip Telegram `getMe` validation (use `true` for local dev) |
+| `PORT` | ❌ No | `3000` | Server port (Railway sets this automatically) |
 
 ## API Reference
 
-### Bot Management (Admin API)
+### Admin API — Bot Registration
 
-All admin routes require **`X-API-Key: <GATEWAY_API_KEY>`** header.
+All admin routes require `X-API-Key: <GATEWAY_API_KEY>` header.
 
 #### Register a Bot
+
 ```http
 POST /admin/bots
 Content-Type: application/json
 X-API-Key: your-api-key
 
 {
-  "token": "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
-  "name": "My Telegram Bot"
+  "token": "1234567890:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
+  "name": "My Bot"
 }
 ```
-**Response:** `201 Created` → `{ "botId": "123456789", "status": "registered" }`
+
+Response: `{ "botId": "1234567890", "status": "registered" }`
+
+This:
+- Validates the bot token via Telegram's `getMe`
+- Registers the bot webhook with Telegram (URL = `<BASE_URL>/webhook/bot/<botId>`)
+- Makes the bot available for WebSocket subscriptions
 
 #### List Registered Bots
+
 ```http
 GET /admin/bots
 X-API-Key: your-api-key
 ```
-**Response:** `200 OK` → `{ "bots": [{ "botId": "...", "name": "...", "status": "active", ... }] }`
 
 #### Unregister a Bot
+
 ```http
 DELETE /admin/bots/:botId
 X-API-Key: your-api-key
 ```
-**Response:** `200 OK` → `{ "status": "unregistered" }`
+
+Response: `{ "status": "unregistered" }`
+
+Removes the webhook from Telegram and stops dispatching updates.
 
 ### WebSocket Gateway
 
-Connect to the **WebSocket Gateway** at path `/`: `wss://your-domain.com/?token=<GATEWAY_API_KEY>`
+Connect at `wss://your-domain.com/?token=<GATEWAY_API_KEY>`.
 
-#### Subscribe to Bot Updates
-Send: `{ "type": "subscribe", "botId": "123456789" }`  
-Response: `{ "type": "subscribed", "botId": "123456789" }`
+| Direction | Message | Description |
+|-----------|---------|-------------|
+| Send | `{ "type": "subscribe", "botId": "1234567890" }` | Subscribe to a bot's updates |
+| Receive | `{ "type": "subscribed", "botId": "1234567890" }` | Confirmation |
+| Send | `{ "type": "unsubscribe", "botId": "1234567890" }` | Unsubscribe |
+| Receive | `{ "type": "unsubscribed", "botId": "1234567890" }` | Confirmation |
+| Send | `{ "type": "ping" }` | Heartbeat |
+| Receive | `{ "type": "pong" }` | Heartbeat response |
+| Receive | `{ "type": "update", "botId": "...", "payload": {...} }` | Telegram update event |
+| Send | `{ "type": "sendMessage", "botId": "...", "chatId": 123, "text": "Hello" }` | Send a Telegram message from a registered bot |
+| Receive | `{ "type": "sent", "botId": "...", "ok": true }` | Confirmation of sent message |
+| Send | `{ "type": "sendMessage", "botId": "...", "chatId": 123, "text": "Hi", "parse_mode": "HTML" }` | Send with formatting options |
 
-#### Unsubscribe from Bot Updates
-Send: `{ "type": "unsubscribe", "botId": "123456789" }`  
-Response: `{ "type": "unsubscribed", "botId": "123456789" }`
+### Update Payload
 
-#### Ping / Heartbeat
-Send: `{ "type": "ping" }`  
-Response: `{ "type": "pong" }`
+The `payload` field contains the raw [Telegram Update object](https://core.telegram.org/bots/api#update) — messages, edited messages, callback queries, channel posts, etc.
 
-### Webhook Receiver (for Client Updates)
+## Use Cases
 
-All bot updates are sent over the WebSocket connection. Bot registration via Admin API auto-configures webhook URLs.
+- **Multi-bot dashboard** — Subscribe to multiple Telegram bots from one WebSocket connection
+- **Real-time chat monitoring** — Stream bot conversations to a UI in real time
+- **Bot analytics pipeline** — Pipe Telegram updates into a data pipeline or storage
+- **Multi-tenant bot platform** — Register/unregister bots dynamically via API without redeploying
+- **Serverless bot extension** — Offload webhook processing to a gateway and handle logic elsewhere
 
-**Update Payload Format:**
-```json
-{
-  "type": "update",
-  "botId": "123456789",
-  "payload": { /* Telegram Update object */ }
-}
-```
+## Local Development
 
----
-
-## Usage Examples
-
-### Register a Bot (curl)
 ```bash
-curl -X POST http://localhost:3000/admin/bots \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key" \
-  -d '{"token":"123456789:BOT_TOKEN","name":"MyBot"}'
+cp .env.example .env
+# Edit .env: set GATEWAY_API_KEY, SKIP_BOT_VALIDATION=true, PORT=3000
+npm install
+npm run dev
 ```
 
-### Listen for Updates (Node.js)
-```javascript
-const ws = new WebSocket('wss://your-domain.com/?token=your-api-key');
+## Architecture
 
-ws.on('open', () => {
-  // subscribe to bot updates
-  ws.send(JSON.stringify({ type: 'subscribe', botId: '123456789' }));
-});
-
-ws.on('message', (data) => {
-  const msg = JSON.parse(data);
-  if (msg.type === 'update') {
-    console.log(`[${msg.botId}] update:`, msg.payload);
-  }
-});
-```
-
----
+- **Runtime:** Node.js 22, TypeScript
+- **HTTP framework:** [Hono](https://hono.dev/) — fast, lightweight
+- **Telegram SDK:** [Telegraf](https://telegraf.js.org/) — webhook update handling
+- **WebSocket:** [ws](https://github.com/websockets/ws) — real-time client streaming
+- **Deployment:** Docker multi-stage build, ~65MB final image
+- **State:** In-memory (stateless; Railway handles horizontal scaling)
 
 ## Client SDK
 
-A TypeScript client is available in the `client-sdk/` directory for consuming this gateway. It handles auth, reconnection, heartbeat, and message forwarding automatically.
+## Client SDK
 
-### Using the React SDK
+A TypeScript/React client SDK is published on npm as [`telegram-gateway-client`](https://www.npmjs.com/package/telegram-gateway-client).
+
 ```bash
-npm install telegram-gateway-client-sdk # or your package manager
+npm install telegram-gateway-client
 ```
 
----
+It handles:
+- WebSocket reconnection with exponential backoff
+- Automatic heartbeat
+- Typed subscription management
+- React hooks for consuming updates
+- `sendMessage()` for sending Telegram messages over the WebSocket
 
-## Development & Production Configuration
+Source code is in [`client-sdk/`](client-sdk/).
 
-### Local development:
-```bash
-cp .env.example .env
-# Edit .env with your values
-npm run dev  # Watches and restarts on source changes
-```
+## Deploy and Host railway-telegram-gateway
 
-### Docker:
-```bash
-docker build -t telegram-gateway .
-docker run -p 3000:8080 --env-file .env telegram-gateway:latest
-```
+Source: [https://github.com/INAPP-Mobile/railway-telegram-gateway](https://github.com/INAPP-Mobile/railway-telegram-gateway)
 
-### Railway deployment:
-1. Click **Deploy on Railway** button above
-2. Set `GATEWAY_API_KEY` (**required**) in your Railway app settings
-3. Re-deploy to apply changes — the app will fail fast if required env vars are missing at startup
+### About Hosting
 
----
+Multi-bot Telegram webhook gateway with real-time WebSocket event streaming and bidirectional messaging. Register Telegram bots via Admin API, stream their updates to WebSocket clients, and send messages back through the same connection — all in one Railway deployment.
+
+### Why Deploy
+
+Deploy railway-telegram-gateway on Railway with one click. Get instant HTTPS, automatic scaling, and zero-config infrastructure — no Docker or Kubernetes knowledge required.
+
+### Common Use Cases
+
+- Quick deployment for development and staging environments
+- Production-ready hosting with automatic HTTPS and scaling
+- One-click shareable demo environments
+- Bots application hosting with minimal configuration
+
+### Dependencies for
+
+#### Deployment Dependencies
+
+Railway automatically detects your project's runtime and provisions the necessary infrastructure. No additional dependencies required.
 
 ## License
 
-MIT
+MIT — by [INAPP](https://github.com/INAPP-Mobile)

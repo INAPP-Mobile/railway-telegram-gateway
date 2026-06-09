@@ -1,11 +1,14 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { WSMessage } from './types';
 
+type SendMessageFn = (botId: string, chatId: number | string, text: string, options?: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
+
 export class WebSocketGateway {
   private subscriptions: Map<string, Set<WebSocket>> = new Map();
   private clients: Map<WebSocket, { token?: string | undefined; subscriptions: Set<string> }> = new Map();
   private apiKeys: Set<string>;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private sendMessageHandler: SendMessageFn | null = null;
 
   constructor(apiKeysEnv: string) {
     this.apiKeys = new Set(apiKeysEnv.split(',').map(k => k.trim()).filter(Boolean));
@@ -14,6 +17,10 @@ export class WebSocketGateway {
   verifyClient(token?: string): boolean {
     if (!token) return false;
     return this.apiKeys.has(token);
+  }
+
+  setSendMessageHandler(handler: SendMessageFn): void {
+    this.sendMessageHandler = handler;
   }
 
   subscribe(ws: WebSocket, botId: string): void {
@@ -64,6 +71,29 @@ export class WebSocketGateway {
         if (message.botId) {
           this.unsubscribe(ws, message.botId);
           ws.send(JSON.stringify({ type: 'unsubscribed', botId: message.botId }));
+        }
+        break;
+      case 'sendMessage':
+        if (message.botId && message.chatId && message.text) {
+          if (!this.sendMessageHandler) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Send message handler not configured' }));
+            break;
+          }
+          this.sendMessageHandler(
+            message.botId,
+            message.chatId,
+            message.text,
+            {
+              parse_mode: message.parse_mode,
+              disable_web_page_preview: message.disable_web_page_preview,
+              disable_notification: message.disable_notification,
+              reply_to_message_id: message.reply_to_message_id,
+            }
+          ).then(result => {
+            ws.send(JSON.stringify({ type: 'sent', botId: message.botId, ok: result.ok, error: result.error }));
+          });
+        } else {
+          ws.send(JSON.stringify({ type: 'error', message: 'sendMessage requires botId, chatId, and text' }));
         }
         break;
       case 'ping':

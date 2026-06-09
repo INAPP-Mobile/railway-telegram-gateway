@@ -22,6 +22,9 @@ export function createApp(
     return c.text('OK');
   });
 
+  // Health check (used by Railway for deployment health)
+  app.get('/health', (c) => c.json({ status: 'healthy' }));
+
   // Admin API: bot management
   app.post('/admin/bots', async (c) => adminAPI.registerBot(c));
   app.delete('/admin/bots/:botId', async (c) => adminAPI.unregisterBot(c));

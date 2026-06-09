@@ -17,10 +17,25 @@ export interface Subscription {
   subscribedAt: Date;
 }
 
+export interface SendMessagePayload {
+  chatId: number | string;
+  text: string;
+  parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
+  disable_web_page_preview?: boolean;
+  disable_notification?: boolean;
+  reply_to_message_id?: number;
+}
+
 export interface WSMessage {
-  type: 'subscribe' | 'unsubscribe' | 'ping';
+  type: 'subscribe' | 'unsubscribe' | 'ping' | 'sendMessage';
   botId?: string;
   token?: string;
+  chatId?: number | string;
+  text?: string;
+  parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
+  disable_web_page_preview?: boolean;
+  disable_notification?: boolean;
+  reply_to_message_id?: number;
 }
 
 export interface BotRegistrationRequest {
