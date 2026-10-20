@@ -1,13 +1,35 @@
 import { Telegraf, Context } from 'telegraf';
 import type { Update } from 'telegraf/typings/core/types/typegram';
 import { WebSocketGateway } from './gateway';
+import { BotSendRateLimiter } from './rate-limiter';
+import { Outbox } from './outbox';
+import { BotGoneError } from './errors';
+import { SendResult } from './types';
 
 export class WebhookHandler {
   private bots: Map<string, Telegraf<Context>> = new Map();
+  /** Bots explicitly removed via Admin API — a permanent condition for the outbox. */
+  private deregistered: Set<string> = new Set();
   private gateway: WebSocketGateway;
+  private rateLimiter: BotSendRateLimiter;
+  private outbox: Outbox | null = null;
 
-  constructor(gateway: WebSocketGateway) {
+  constructor(gateway: WebSocketGateway, rateLimiter?: BotSendRateLimiter) {
     this.gateway = gateway;
+    this.rateLimiter = rateLimiter ?? new BotSendRateLimiter();
+  }
+
+  /**
+   * When set, sends are durably enqueued here and delivered by the OutboxWorker
+   * (survives redeploy). When null, sends are dispatched synchronously through
+   * the rate limiter (legacy/in-process behavior).
+   */
+  setOutbox(outbox: Outbox): void {
+    this.outbox = outbox;
+  }
+
+  getRateLimiter(): BotSendRateLimiter {
+    return this.rateLimiter;
   }
 
   async registerBot(botId: string, token: string): Promise<void> {
@@ -15,6 +37,7 @@ export class WebhookHandler {
       return; // Already registered
     }
 
+    this.deregistered.delete(botId);
     const bot = new Telegraf<Context>(token);
     this.bots.set(botId, bot);
 
@@ -50,13 +73,34 @@ export class WebhookHandler {
       disable_notification?: boolean;
       reply_to_message_id?: number;
     }
-  ): Promise<{ ok: boolean; error?: string }> {
+  ): Promise<SendResult> {
     const bot = this.bots.get(botId);
     if (!bot) {
       return { ok: false, error: 'Bot not registered' };
     }
+
+    // Durable outbox path (default on Railway): persist the send first, return a
+    // "queued" ack immediately, and let the OutboxWorker pace delivery. This is
+    // what keeps outbound messages alive across redeploys. The async final
+    // result arrives over the WS `outbox` event for the bot.
+    if (this.outbox) {
+      const messageId = this.outbox.enqueue({
+        botId,
+        chatId,
+        text,
+        options: options ?? null,
+      });
+      return { ok: true, queued: true, messageId };
+    }
+
+    // In-process fallback (tests / single-process setups without the worker):
+    // route through the rate limiter synchronously.
     try {
-      await bot.telegram.sendMessage(chatId, text, options || {});
+      // Route through the rate limiter: paces sends to Telegram's per-bot (~30/s global)
+      // and per-chat (~20/2min window) caps, and honors retry_after on 429.
+      await this.rateLimiter.sendOnce(botId, chatId, () =>
+        bot.telegram.sendMessage(chatId, text, options || {}),
+      );
       return { ok: true };
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Failed to send message';
@@ -65,10 +109,13 @@ export class WebhookHandler {
   }
 
   unregisterBot(botId: string): void {
-    const bot = this.bots.get(botId);
-    if (bot) {
-      this.bots.delete(botId);
-    }
+    this.bots.delete(botId);
+    this.deregistered.add(botId);
+  }
+
+  /** True once Admin API has explicitly removed this bot from the deployment. */
+  isDeregistered(botId: string): boolean {
+    return this.deregistered.has(botId);
   }
 
   getWebhookHandler(): (update: Update) => Promise<void> {
@@ -83,5 +130,27 @@ export class WebhookHandler {
     const bot = this.bots.get(botId);
     if (!bot) return null;
     return (update: Update) => bot.handleUpdate(update);
+  }
+
+  /**
+   * Dispatch one message directly to Telegram through the rate limiter.
+   * This is the delivery primitive the OutboxWorker uses; it does NOT enqueue.
+   * If the bot isn't attached (e.g. mid-restart before restore), it throws —
+   * the worker treats that as a retriable attempt.
+   */
+  async dispatch(botId: string, chatId: number | string, text: string, options?: Record<string, unknown>): Promise<unknown> {
+    const bot = this.bots.get(botId);
+    if (!bot) {
+      // Explicitly deregistered → permanent for this queued message.
+      // Merely not-yet-attached (mid-restart) → retriable.
+      if (this.deregistered.has(botId)) {
+        throw new BotGoneError(botId);
+      }
+      throw new Error(`Bot ${botId} not attached yet`);
+    }
+    await this.rateLimiter.sendOnce(botId, chatId, () =>
+      bot.telegram.sendMessage(chatId, text, (options as object) || {}),
+    );
+    return true;
   }
 }

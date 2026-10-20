@@ -44,6 +44,12 @@ No polling, no public bot IPs needed, no infrastructure wrangling. Just bots →
 | `SUBSCRIPTION_MAX_PER_CLIENT` | ❌ No | `10` | Max bot subscriptions per WebSocket client |
 | `WEBSOCKET_HEARTBEAT_INTERVAL` | ❌ No | `30000` | WebSocket ping interval (ms) |
 | `SKIP_BOT_VALIDATION` | ❌ No | `false` | Skip Telegram `getMe` validation (use `true` for local dev) |
+| `RATE_LIMIT_GLOBAL_PER_SEC` | ❌ No | `29` | Sustained sends/second per bot (Telegram's global cap is 30/s) |
+| `RATE_LIMIT_CHAT_PER_SEC` | ❌ No | `1` | Sustained sends/second per chat |
+| `RATE_LIMIT_CHAT_WINDOW_CAP` | ❌ No | `20` | Max per-chat sends per `RATE_LIMIT_CHAT_WINDOW_MS` (Telegram resets a 20–30 message window) |
+| `RATE_LIMIT_CHAT_WINDOW_MS` | ❌ No | `120000` | Sliding window length for the per-chat cap (ms) |
+| `RATE_LIMIT_MAX_RETRIES` | ❌ No | `3` | Retries after an HTTP 429 before surfacing the error |
+| `RATE_LIMIT_MAX_RETRY_AFTER_MS` | ❌ No | `60000` | Max sleep honoring a 429 `retry_after` (ms) |
 | `PORT` | ❌ No | `3000` | Server port (Railway sets this automatically) |
 
 ## API Reference
@@ -135,7 +141,8 @@ npm run dev
 - **Telegram SDK:** [Telegraf](https://telegraf.js.org/) — webhook update handling
 - **WebSocket:** [ws](https://github.com/websockets/ws) — real-time client streaming
 - **Deployment:** Docker multi-stage build, ~65MB final image
-- **State:** In-memory (stateless; Railway handles horizontal scaling)
+- **State:** In-process (single replica + sticky sessions; see `doc/multi-replica.md` for the shared-store path if scaling out)
+- **Outbound messaging:** Paced by a per-bot token bucket (~29/s) + per-chat bucket (~1/s) + sliding window cap, with 429 `retry_after` backoff (`src/rate-limiter.ts`)
 
 ## Client SDK
 

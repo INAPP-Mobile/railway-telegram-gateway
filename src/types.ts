@@ -26,6 +26,39 @@ export interface SendMessagePayload {
   reply_to_message_id?: number;
 }
 
+/** Ack returned to the caller when a send is enqueued for delivery. */
+export interface SendResult {
+  ok: boolean;
+  error?: string;
+  /** Present when the message was accepted into the durable outbox. */
+  messageId?: number;
+  /** True when the message is queued (delivery is async, paced by the rate limiter). */
+  queued?: boolean;
+}
+
+/** Lifecycle of a durable outbox message. */
+export type OutboxStatus = 'queued' | 'pending' | 'sent' | 'failed';
+
+export interface OutboxRecord {
+  id: number;
+  botId: string;
+  chatId: number | string;
+  text: string;
+  options: Record<string, unknown> | null;
+  status: OutboxStatus;
+  attempts: number;
+  error: string | null;
+  createdAt: string; // ISO 8601
+  nextTryAt: number; // epoch ms, when (re)delivery becomes due
+}
+
+export interface OutboxStatusEvent {
+  botId: string;
+  messageId: number;
+  status: OutboxStatus;
+  error?: string;
+}
+
 export interface WSMessage {
   type: 'subscribe' | 'unsubscribe' | 'ping' | 'sendMessage';
   botId?: string;

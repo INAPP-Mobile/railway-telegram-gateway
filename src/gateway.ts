@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import { WSMessage } from './types';
+import { WSMessage, OutboxStatusEvent, SendResult } from './types';
 
-type SendMessageFn = (botId: string, chatId: number | string, text: string, options?: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
+type SendMessageFn = (botId: string, chatId: number | string, text: string, options?: Record<string, unknown>) => Promise<SendResult>;
 
 export class WebSocketGateway {
   private subscriptions: Map<string, Set<WebSocket>> = new Map();
@@ -59,6 +59,22 @@ export class WebSocketGateway {
     });
   }
 
+  /**
+   * Broadcast a typed outbox lifecycle event to every client subscribed to the bot.
+   * Lets WS-based senders learn async delivery results (sent/failed) of messages they queued.
+   */
+  publishOutboxEvent(event: OutboxStatusEvent): void {
+    const subscribers = this.subscriptions.get(event.botId);
+    if (!subscribers || subscribers.size === 0) return;
+
+    const message = JSON.stringify({ type: 'outbox', ...event });
+    subscribers.forEach(ws => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(message);
+      }
+    });
+  }
+
   handleMessage(ws: WebSocket, message: WSMessage): void {
     switch (message.type) {
       case 'subscribe':
@@ -90,7 +106,7 @@ export class WebSocketGateway {
               reply_to_message_id: message.reply_to_message_id,
             }
           ).then(result => {
-            ws.send(JSON.stringify({ type: 'sent', botId: message.botId, ok: result.ok, error: result.error }));
+            ws.send(JSON.stringify({ type: 'sent', botId: message.botId, ok: result.ok, queued: result.queued ?? false, messageId: result.messageId, error: result.error }));
           });
         } else {
           ws.send(JSON.stringify({ type: 'error', message: 'sendMessage requires botId, chatId, and text' }));
