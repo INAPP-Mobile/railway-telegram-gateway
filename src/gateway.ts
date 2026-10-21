@@ -1,4 +1,5 @@
 import { WebSocketServer, WebSocket } from 'ws';
+import type { IncomingMessage } from 'http';
 import { WSMessage, OutboxStatusEvent, SendResult } from './types';
 
 type SendMessageFn = (botId: string, chatId: number | string, text: string, options?: Record<string, unknown>) => Promise<SendResult>;
@@ -17,6 +18,12 @@ export class WebSocketGateway {
   verifyClient(token?: string): boolean {
     if (!token) return false;
     return this.apiKeys.has(token);
+  }
+
+  /** True when this socket has proven a valid GATEWAY_API_KEY, by either route. */
+  private isAuthenticated(ws: WebSocket): boolean {
+    const client = this.clients.get(ws);
+    return !!client?.token && this.apiKeys.has(client.token);
   }
 
   setSendMessageHandler(handler: SendMessageFn): void {
@@ -76,6 +83,14 @@ export class WebSocketGateway {
   }
 
   handleMessage(ws: WebSocket, message: WSMessage): void {
+    // `ping` stays open so liveness checks work pre-auth; everything else is
+    // bot-scoped and requires a proven key, whether it came from the URL or the
+    // subscribe frame.
+    if (message.type !== 'ping' && !this.isAuthenticated(ws)) {
+      ws.send(JSON.stringify({ type: 'error', message: 'Unauthorized: valid token required' }));
+      return;
+    }
+
     switch (message.type) {
       case 'subscribe':
         if (message.botId) {
@@ -150,21 +165,38 @@ export class WebSocketGateway {
   }
 
   createWSServer(server: any): WebSocketServer {
-    const wss = new WebSocketServer({ server });
+    // Authenticate at the HTTP upgrade. A wrong token is rejected with 401; a
+    // missing one is allowed through so legacy clients can prove the key on
+    // their first `subscribe` frame, but handleMessage gates every bot-scoped
+    // action until one of the two paths has proven it.
+    const wss = new WebSocketServer({ server, verifyClient: (info: { req: IncomingMessage }) => {
+      const url = new URL(info.req.url || '', `http://${info.req.headers.host}`);
+      const token = url.searchParams.get('token') || undefined;
+
+      // A wrong URL token is rejected here (401) so a bad credential fails fast.
+      if (token) return this.verifyClient(token);
+
+      // No token in the URL: allow the connection so legacy clients can prove the
+      // key on their first `subscribe` frame, but handleMessage drops every
+      // bot-scoped action until that proof arrives.
+      return true;
+    } });
 
     wss.on('connection', (ws: WebSocket, request) => {
       const url = new URL(request.url || '', `http://${request.headers.host}`);
       const token = url.searchParams.get('token') || undefined;
 
-      // Register client with query param token (if provided)
-      this.registerClient(ws, token);
+      // The upgrade already validated a URL token; a client without one arrives
+      // unauthenticated and must prove the key on its first subscribe frame.
+      this.registerClient(ws, token && this.apiKeys.has(token) ? token : undefined);
 
       ws.on('message', (data) => {
         try {
           const message: WSMessage = JSON.parse(data.toString());
 
-          // Auth via subscribe message when no token in URL
-          if (message.type === 'subscribe' && message.token && !token) {
+          // Legacy auth path: token in the subscribe frame instead of the URL.
+          // Kept so existing deployments' clients keep working.
+          if (message.type === 'subscribe' && message.token) {
             const existing = this.clients.get(ws);
             if (existing && !existing.token) {
               if (!this.apiKeys.has(message.token)) {
