@@ -31,7 +31,7 @@ No polling, no public bot IPs needed, no infrastructure wrangling. Just bots →
 ```
 
 1. **Register** a bot via the Admin API with its Telegram bot token
-2. The gateway validates the token and points that bot's Telegram webhook at `<BASE_URL>/webhook/bot/<botId>`
+2. The gateway validates the token and points that bot's Telegram webhook at `BASE_URL/webhook/bot/{botId}`
 3. Telegram posts updates (messages, callbacks, channel posts) to the gateway
 4. The gateway dispatches each update over WebSocket to clients subscribed to that bot
 5. Clients can send messages back; sends are queued durably and delivered under rate limits
@@ -45,7 +45,7 @@ No polling, no public bot IPs needed, no infrastructure wrangling. Just bots →
 | 3 | Deploy — Railway provisions HTTPS and a public domain automatically |
 | 4 | *(Recommended)* Attach a volume so the bot registry and outbound queue survive redeploys |
 | 5 | Register your first bot with `POST /admin/bots` |
-| 6 | Connect a client to `wss://<your-domain>/ws?token=<GATEWAY_API_KEY>` |
+| 6 | Connect a client to `wss://{your-domain}/ws?token=GATEWAY_API_KEY` |
 
 > **Set `GATEWAY_API_KEY` yourself.** If unset, the app generates a random key at boot and logs it. That key changes on every restart, so clients and the Admin API would break on redeploy.
 
@@ -79,17 +79,17 @@ No polling, no public bot IPs needed, no infrastructure wrangling. Just bots →
 
 ### Admin API — Bot Registration
 
-All admin routes require an `X-API-Key: <GATEWAY_API_KEY>` header.
+All admin routes require an `X-API-Key: GATEWAY_API_KEY` header.
 
 #### Register a Bot
 
 ```http
 POST /admin/bots
 Content-Type: application/json
-X-API-Key: <GATEWAY_API_KEY>
+X-API-Key: GATEWAY_API_KEY
 
 {
-  "token": "1234567890:<bot-token>",
+  "token": "1234567890:{bot-token}",
   "name": "My Bot"
 }
 ```
@@ -98,7 +98,7 @@ Response: `{ "botId": "1234567890", "status": "registered" }`
 
 This:
 - Validates the bot token via Telegram's `getMe`
-- Registers the bot webhook with Telegram (URL = `<BASE_URL>/webhook/bot/<botId>`)
+- Registers the bot webhook with Telegram (URL = `BASE_URL/webhook/bot/{botId}`)
 - Attaches the bot in-process so it can receive updates
 - Persists it, so it survives a restart
 
@@ -116,7 +116,7 @@ Errors are caller-correctable where they can be:
 
 ```http
 GET /admin/bots
-X-API-Key: <GATEWAY_API_KEY>
+X-API-Key: GATEWAY_API_KEY
 ```
 
 Returns each bot's `botId`, `name`, `status` (`active` or `error`), `userId`, and `registeredAt`.
@@ -125,7 +125,7 @@ Returns each bot's `botId`, `name`, `status` (`active` or `error`), `userId`, an
 
 ```http
 DELETE /admin/bots/:botId
-X-API-Key: <GATEWAY_API_KEY>
+X-API-Key: GATEWAY_API_KEY
 ```
 
 Response: `{ "status": "unregistered" }`
@@ -134,11 +134,11 @@ Deletes the Telegram webhook, detaches the bot, and removes it from the registry
 
 ### WebSocket Gateway
 
-Connect to `wss://<your-domain>/ws?token=<GATEWAY_API_KEY>`.
+Connect to `wss://{your-domain}/ws?token=GATEWAY_API_KEY`.
 
 **Both WebSocket auth styles are supported:**
 
-- `?token=<GATEWAY_API_KEY>` on the connect URL (recommended — what the SDK does)
+- `?token=GATEWAY_API_KEY` on the connect URL (recommended — what the SDK does)
 - `token` in the `subscribe` frame, for clients that can't put credentials in a URL
 
 A **wrong** token in the URL is rejected with HTTP 401 before the socket opens. A connection with no token may open, but every bot-scoped frame (`subscribe`, `unsubscribe`, `sendMessage`) is refused with an `error` frame until the key is proven by one of the two routes. `ping` is always allowed so liveness checks work pre-auth.
@@ -202,7 +202,7 @@ Then, with the server on `http://localhost:3000`:
 curl -X POST http://localhost:3000/admin/bots \
   -H "X-API-Key: $GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"token":"1234567890:<bot-token>","name":"Local Bot"}'
+  -d '{"token":"1234567890:{bot-token}","name":"Local Bot"}'
 ```
 
 Run the test suite with `npm test`.
