@@ -57,7 +57,7 @@ No polling, no public bot IPs needed, no infrastructure wrangling. Just bots →
 |----------|----------|---------|-------------|
 | `GATEWAY_API_KEY` | ✅ Yes | random per boot | Auth key for the WebSocket and Admin API. Comma-separated list accepted, for key rotation. |
 | `BASE_URL` | ❌ No | Railway public domain, else `http://localhost:${PORT}` | Public URL used to register bot webhooks. Set only to pin a custom domain. |
-| `DATABASE_PATH` | ❌ No | `<data dir>/bots.db` | Explicit SQLite path. Overrides the volume-derived location. |
+| `DATABASE_PATH` | ❌ No | `{data dir}/bots.db` | Explicit SQLite path. Overrides the volume-derived location. |
 | `GATEWAY_DATA_DIR` | ❌ No | volume mount path, else `./data` | Data directory used when no volume is attached. |
 | `PORT` | ❌ No | `3000` | Server port (Railway sets this). |
 | `WEBSOCKET_HEARTBEAT_INTERVAL` | ❌ No | `30000` | WebSocket ping interval (ms). |
